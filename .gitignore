@@ -1,0 +1,10 @@
+__pycache__
+.venv
+ckpt
+data
+result
+wandb
+test
+
+.pth
+.ipynb
