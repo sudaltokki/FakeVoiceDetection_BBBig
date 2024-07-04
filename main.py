@@ -125,9 +125,9 @@ def main():
             })
         
         
-        df = pd.read_csv('data/train.csv')
-        # df = df[:100]
-        train_df, val_df, _, _ = train_test_split(df, df['label'], test_size=CONFIG.TEST_SIZE, random_state=CONFIG.SEED)
+        df = pd.read_csv(CONFIG.TRAIN_PATH)
+        # df = df[110000:]
+        train_df, val_df, _, _ = train_test_split(df, df[['fake', 'real']], test_size=CONFIG.TEST_SIZE, random_state=CONFIG.SEED)
 
         if CONFIG.feat == 1:
             train_feat, train_labels = get_mfcc_feature(train_df, True)
@@ -138,6 +138,8 @@ def main():
             val_feat, val_labels = get_mstft_feature(val_df, True)
             input_dim = CONFIG.n_mels
         
+        # with open("train.pickle", "wb") as f:
+        #     pickle.dump(train_feat, f)
 
         train_dataset = CustomDataset(train_feat, train_labels)
         val_dataset = CustomDataset(val_feat, val_labels)

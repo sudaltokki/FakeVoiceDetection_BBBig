@@ -33,16 +33,16 @@ def get_mfcc_feature(df, train_mode=True):
     labels = []
     d = []
     data = False
-    if train_mode:
-        if os.path.exists(f'data/train_mfcc{str(CONFIG.N_MFCC)}.pickle'):
-            with open(f'data/train_mfcc{str(CONFIG.N_MFCC)}.pickle', 'rb') as file:
-                  data = pickle.load(file)
-                  print(f"Data loaded from data/train_mfcc{str(CONFIG.N_MFCC)}.pickle")
-    else:
-        if os.path.exists(f'data/test_mfcc{str(CONFIG.N_MFCC)}.pickle'):
-            with open(f'data/test_mfcc{str(CONFIG.N_MFCC)}.pickle', 'rb') as file:
-                data = pickle.load(file)
-                print(f"Data loaded from data/test_mfcc{str(CONFIG.N_MFCC)}.pickle")
+    # if train_mode:
+    #     if os.path.exists(f'data/train_mfcc{str(CONFIG.N_MFCC)}.pickle'):
+    #         with open(f'data/train_mfcc{str(CONFIG.N_MFCC)}.pickle', 'rb') as file:
+    #               data = pickle.load(file)
+    #               print(f"Data loaded from data/train_mfcc{str(CONFIG.N_MFCC)}.pickle")
+    # else:
+    #     if os.path.exists(f'data/test_mfcc{str(CONFIG.N_MFCC)}.pickle'):
+    #         with open(f'data/test_mfcc{str(CONFIG.N_MFCC)}.pickle', 'rb') as file:
+    #             data = pickle.load(file)
+    #             print(f"Data loaded from data/test_mfcc{str(CONFIG.N_MFCC)}.pickle")
     
     for idx, row in tqdm(df.iterrows(), total = df.shape[0]):
         if data:
@@ -65,9 +65,9 @@ def get_mfcc_feature(df, train_mode=True):
         #           print(f"Data saved as data/train_mfcc{str(CONFIG.N_MFCC)}.pickle")
 
         if train_mode:
-            label = row['label']
             label_vector = np.zeros(CONFIG.N_CLASSES, dtype=float)
-            label_vector[0 if label == 'fake' else 1] = 1
+            label_vector[0] = row['fake']
+            label_vector[1] = row['real']
             labels.append(label_vector)
 
     if train_mode:
@@ -110,9 +110,9 @@ def get_mstft_feature(df, train_mode=True):
         #             print(f"Data saved as data/train_mstft{str(CONFIG.n_mels)}.pickle")
 
         if train_mode:
-            label = row['label']
             label_vector = np.zeros(CONFIG.N_CLASSES, dtype=float)
-            label_vector[0 if label == 'fake' else 1] = 1
+            label_vector[0] = row['fake']
+            label_vector[1] = row['real']
             labels.append(label_vector)
 
     if train_mode:

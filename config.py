@@ -1,9 +1,9 @@
 class Config:
     # base
     user = 'bbbig' # 로그용인데 본인 이름 약자 쓰면 파일 저장 할때 쓰임
-    model = 'LCNN' # LCNN, MLP
+    model = 'MLP' # LCNN, MLP
     SR = 32000
-    feat = 2 # [1:'MFCC', 2:'MSTFT']
+    feat = 1 # [1:'MFCC', 2:'MSTFT']
 
     # mfcc
     N_MFCC = 16 # LCNN으로 돌릴 시 16이상 2의 배수로 설정
@@ -13,6 +13,7 @@ class Config:
     win_len = 512
     n_mels = 60
     # Dataset
+    TRAIN_PATH = 'data/org_com_not_sliced_noise_wav_now.csv'
     ROOT_FOLDER = './'
     # Preprocess
     max_len = 256
