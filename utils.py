@@ -33,16 +33,6 @@ def get_mfcc_feature(df, train_mode=True):
     labels = []
     d = []
     data = False
-    # if train_mode:
-    #     if os.path.exists(f'data/train_mfcc{str(CONFIG.N_MFCC)}.pickle'):
-    #         with open(f'data/train_mfcc{str(CONFIG.N_MFCC)}.pickle', 'rb') as file:
-    #               data = pickle.load(file)
-    #               print(f"Data loaded from data/train_mfcc{str(CONFIG.N_MFCC)}.pickle")
-    # else:
-    #     if os.path.exists(f'data/test_mfcc{str(CONFIG.N_MFCC)}.pickle'):
-    #         with open(f'data/test_mfcc{str(CONFIG.N_MFCC)}.pickle', 'rb') as file:
-    #             data = pickle.load(file)
-    #             print(f"Data loaded from data/test_mfcc{str(CONFIG.N_MFCC)}.pickle")
     
     for idx, row in tqdm(df.iterrows(), total = df.shape[0]):
         if data:
@@ -59,11 +49,7 @@ def get_mfcc_feature(df, train_mode=True):
         else:
             mfcc = np.mean(mfcc.T, axis=0)
         features.append(mfcc)
-        # if len(d):
-        #     with open(f'data/train_mfcc{str(CONFIG.N_MFCC)}.pickle', 'wb') as file:
-        #           pickle.dump(d, file)
-        #           print(f"Data saved as data/train_mfcc{str(CONFIG.N_MFCC)}.pickle")
-
+       
         if train_mode:
             label_vector = np.zeros(CONFIG.N_CLASSES, dtype=float)
             label_vector[0] = row['fake']
@@ -151,7 +137,7 @@ def validation(model, main_criterion, cent_criterion, val_loader, device):
 
         all_labels = np.concatenate(all_labels, axis=0)
         all_probs = np.concatenate(all_probs, axis=0)
-        
+
         # Calculate AUC score
         auc_score, brier_score, ece_score, combined_score = auc_brier_ece(all_labels, all_probs)
 
@@ -176,13 +162,13 @@ def auc_brier_ece(labels, probs):
     # Check if the number and names of columns are the same in both dataframes
     if len(labels) != len(probs):
         raise ValueError("The length of true labels and probs do not match.")
+
     
     # Calculate AUC for each class
     auc_scores = []
-    for idx in range(len(labels)):
-        y_true = labels[idx]
-        y_scores = probs[idx]
-        auc = roc_auc_score(y_true, y_scores)
+    for i in range(2):
+        # print(labels[:, i], probs[:, i])
+        auc = roc_auc_score(labels[:, i], probs[:, i])
         auc_scores.append(auc)
 
 
@@ -193,10 +179,9 @@ def auc_brier_ece(labels, probs):
     ece_scores = []
     
     # Calculate Brier Score and ECE for each class
-    for idx in range(len(labels)):
-        y_true = labels[idx]
-        y_prob = probs[idx]
-        
+    for i in range(2):
+        y_true, y_prob = labels[:, i], probs[:, i]
+        # print(y_true, y_prob)
         # Brier Score
         brier = mean_squared_error(y_true, y_prob)
         brier_scores.append(brier)
@@ -279,3 +264,17 @@ class CenterLoss(nn.Module):
 
         return loss
     
+def check_data(cfg):
+    feat = {1: 'mfcc_feat', 2:'mstft_feat'}
+    train_d = cfg['train_data']
+    f = cfg['feat']
+    sr = cfg['sr']
+    g = list(cfg[feat[f]].values())[0]
+    data_name = f'{train_d}_{f}_{g}_{sr}.pickle'
+    if os.path.exists(data_name):
+        with open(data_name, 'rb') as file:
+            data = pickle.load(file)
+            print(f"Data loaded from {data_name}")
+            return data
+    else:
+        return False, data_name
