@@ -13,7 +13,7 @@ from tqdm import tqdm
 import warnings
 warnings.filterwarnings('ignore')
 
-from config import CONFIG
+from config import CONFIG, wandb_config
 from utils import *
 from dataset import CustomDataset
 from model import *
@@ -32,7 +32,7 @@ def train(model, optimizer, train_loader, val_loader, device, path):
             cent_criterion = CenterLoss(feat_dim=128).to(device)
     optimizer_centloss = torch.optim.SGD(cent_criterion.parameters(), lr=0.5)
     
-    best_val_score = 0
+    best_val_score = 1
     best_model = None
     
     for epoch in tqdm(range(1, CONFIG.N_EPOCHS+1), desc='Train Epoch'):
@@ -68,16 +68,16 @@ def train(model, optimizer, train_loader, val_loader, device, path):
             xent_loss.append(loss.item())
             center_loss.append(cent_loss.item())
                     
-        _val_loss, _val_score = validation(model, main_criterion, cent_criterion, val_loader, device)
+        _val_loss, _auc, _brier, _ece, _val_score = validation(model, main_criterion, cent_criterion, val_loader, device)
         _train_loss = np.mean(train_loss)
         _center_loss = np.mean(center_loss)
         _xent_loss = np.mean(xent_loss)
 
-        print(f'Epoch [{epoch}], Train Loss : [{_train_loss:.5f}] Xent_loss : [{_xent_loss:.5f}] Center Loss : [{_center_loss:.5f}] Val Loss : [{_val_loss:.5f}] Val AUC : [{_val_score:.5f}]')
-        wandb.log({'Train_loss' : _train_loss, 'Xent_loss':_xent_loss, 'Center_loss':_center_loss, 'Val_loss' : _val_loss, 'Val_auc' : _val_score})
+        print(f'Epoch [{epoch}], Train Loss : [{_train_loss:.5f}] Xent_loss : [{_xent_loss:.5f}] Center Loss : [{_center_loss:.5f}] Val Loss : [{_val_loss:.5f}] Val Combined : [{_val_score:.5f}]')
+        wandb.log({'Train_loss' : _train_loss, 'Xent_loss':_xent_loss, 'Center_loss':_center_loss, 'Val_loss' : _val_loss, 'Val_auc' : _auc, 'Val_brier' : _brier, 'Val_ece': _ece, 'Val_score': _val_score})
             
-        if best_val_score < _val_score:
-            best_val_score < _val_score
+        if best_val_score > _val_score:
+            best_val_score = _val_score
             best_model = model
             torch.save(model, f'{path}/ep_{epoch}_best.pt')
     
@@ -101,6 +101,7 @@ def inference(model, test_loader, device):
     return predictions
 
 def main():
+    infer_model = None
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     print(device)
 
@@ -113,21 +114,13 @@ def main():
         project="antispoof",
         name = f'{date}_{CONFIG.user}',
         # track hyperparameters and run metadata
-        config= {
-        "model": CONFIG.model,
-        "sr": CONFIG.SR,
-        "feat": CONFIG.feat,
-        "batch": CONFIG.BATCH_SIZE,
-        "epoch": CONFIG.N_EPOCHS,
-        "lr": CONFIG.LR,
-        "seed":CONFIG.SEED,
-
-            })
+        config= wandb_config
+        )
         
         
-        df = pd.read_csv('data/train.csv')
-        # df = df[:100]
-        train_df, val_df, _, _ = train_test_split(df, df['label'], test_size=CONFIG.TEST_SIZE, random_state=CONFIG.SEED)
+        df = pd.read_csv(CONFIG.TRAIN_PATH)
+        # df = df[112000:]
+        train_df, val_df, _, _ = train_test_split(df, df[['fake', 'real']], test_size=CONFIG.TEST_SIZE, random_state=CONFIG.SEED)
 
         if CONFIG.feat == 1:
             train_feat, train_labels = get_mfcc_feature(train_df, True)
@@ -138,6 +131,8 @@ def main():
             val_feat, val_labels = get_mstft_feature(val_df, True)
             input_dim = CONFIG.n_mels
         
+        # with open("train.pickle", "wb") as f:
+        #     pickle.dump(train_feat, f)
 
         train_dataset = CustomDataset(train_feat, train_labels)
         val_dataset = CustomDataset(val_feat, val_labels)

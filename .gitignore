@@ -5,6 +5,7 @@ data
 result
 wandb
 test
+test.py
 
 .pth
 .ipynb

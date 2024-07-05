@@ -33,16 +33,16 @@ def get_mfcc_feature(df, train_mode=True):
     labels = []
     d = []
     data = False
-    if train_mode:
-        if os.path.exists(f'data/train_mfcc{str(CONFIG.N_MFCC)}.pickle'):
-            with open(f'data/train_mfcc{str(CONFIG.N_MFCC)}.pickle', 'rb') as file:
-                  data = pickle.load(file)
-                  print(f"Data loaded from data/train_mfcc{str(CONFIG.N_MFCC)}.pickle")
-    else:
-        if os.path.exists(f'data/test_mfcc{str(CONFIG.N_MFCC)}.pickle'):
-            with open(f'data/test_mfcc{str(CONFIG.N_MFCC)}.pickle', 'rb') as file:
-                data = pickle.load(file)
-                print(f"Data loaded from data/test_mfcc{str(CONFIG.N_MFCC)}.pickle")
+    # if train_mode:
+    #     if os.path.exists(f'data/train_mfcc{str(CONFIG.N_MFCC)}.pickle'):
+    #         with open(f'data/train_mfcc{str(CONFIG.N_MFCC)}.pickle', 'rb') as file:
+    #               data = pickle.load(file)
+    #               print(f"Data loaded from data/train_mfcc{str(CONFIG.N_MFCC)}.pickle")
+    # else:
+    #     if os.path.exists(f'data/test_mfcc{str(CONFIG.N_MFCC)}.pickle'):
+    #         with open(f'data/test_mfcc{str(CONFIG.N_MFCC)}.pickle', 'rb') as file:
+    #             data = pickle.load(file)
+    #             print(f"Data loaded from data/test_mfcc{str(CONFIG.N_MFCC)}.pickle")
     
     for idx, row in tqdm(df.iterrows(), total = df.shape[0]):
         if data:
@@ -65,9 +65,9 @@ def get_mfcc_feature(df, train_mode=True):
         #           print(f"Data saved as data/train_mfcc{str(CONFIG.N_MFCC)}.pickle")
 
         if train_mode:
-            label = row['label']
             label_vector = np.zeros(CONFIG.N_CLASSES, dtype=float)
-            label_vector[0 if label == 'fake' else 1] = 1
+            label_vector[0] = row['fake']
+            label_vector[1] = row['real']
             labels.append(label_vector)
 
     if train_mode:
@@ -110,9 +110,9 @@ def get_mstft_feature(df, train_mode=True):
         #             print(f"Data saved as data/train_mstft{str(CONFIG.n_mels)}.pickle")
 
         if train_mode:
-            label = row['label']
             label_vector = np.zeros(CONFIG.N_CLASSES, dtype=float)
-            label_vector[0 if label == 'fake' else 1] = 1
+            label_vector[0] = row['fake']
+            label_vector[1] = row['real']
             labels.append(label_vector)
 
     if train_mode:
@@ -153,9 +153,10 @@ def validation(model, main_criterion, cent_criterion, val_loader, device):
         all_probs = np.concatenate(all_probs, axis=0)
         
         # Calculate AUC score
-        auc_score = multiLabel_AUC(all_labels, all_probs)
+        auc_score, brier_score, ece_score, combined_score = auc_brier_ece(all_labels, all_probs)
+
     
-    return _val_loss, auc_score
+    return _val_loss, auc_score, brier_score, ece_score, combined_score
 
 def expected_calibration_error(y_true, y_prob, n_bins=10):
     prob_true, prob_pred = calibration_curve(y_true, y_prob, n_bins=n_bins, strategy='uniform')
@@ -168,24 +169,19 @@ def expected_calibration_error(y_true, y_prob, n_bins=10):
     ece = np.sum(bin_weights * np.abs(prob_true - prob_pred))
     return ece
     
-def auc_brier_ece(answer_df, submission_df):
+def auc_brier_ece(labels, probs):
     # Check for missing values in submission_df
-    if submission_df.isnull().values.any():
-        raise ValueError("The submission dataframe contains missing values.")
-
+    
 
     # Check if the number and names of columns are the same in both dataframes
-    if len(answer_df.columns) != len(submission_df.columns) or not all(answer_df.columns == submission_df.columns):
-        raise ValueError("The columns of the answer and submission dataframes do not match.")
-        
-    submission_df = submission_df[submission_df.iloc[:, 0].isin(answer_df.iloc[:, 0])]
-    submission_df.index = range(submission_df.shape[0])
+    if len(labels) != len(probs):
+        raise ValueError("The length of true labels and probs do not match.")
     
     # Calculate AUC for each class
     auc_scores = []
-    for column in answer_df.columns[1:]:
-        y_true = answer_df[column]
-        y_scores = submission_df[column]
+    for idx in range(len(labels)):
+        y_true = labels[idx]
+        y_scores = probs[idx]
         auc = roc_auc_score(y_true, y_scores)
         auc_scores.append(auc)
 
@@ -197,9 +193,9 @@ def auc_brier_ece(answer_df, submission_df):
     ece_scores = []
     
     # Calculate Brier Score and ECE for each class
-    for column in answer_df.columns[1:]:
-        y_true = answer_df[column].values
-        y_prob = submission_df[column].values
+    for idx in range(len(labels)):
+        y_true = labels[idx]
+        y_prob = probs[idx]
         
         # Brier Score
         brier = mean_squared_error(y_true, y_prob)
@@ -216,7 +212,7 @@ def auc_brier_ece(answer_df, submission_df):
     # Calculate combined score
     combined_score = 0.5 * (1 - mean_auc) + 0.25 * mean_brier + 0.25 * mean_ece
     
-    return combined_score
+    return mean_auc, mean_brier, mean_ece, combined_score
 
 def preprocess_spectrogram(spectrogram, max_length):
     if spectrogram.shape[-1] > max_length:
