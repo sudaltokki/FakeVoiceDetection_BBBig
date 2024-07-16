@@ -121,7 +121,7 @@ def validation(model, main_criterion, val_loader, device, cent_criterion=None):
     val_loss, all_labels, all_probs = [], [], []
     
     with torch.no_grad():
-        for features, labels in iter(val_loader):
+        for features, labels in tqdm(iter(val_loader), desc='Validation'):
             features = features.float().to(device)
             labels = labels.float().to(device)
             

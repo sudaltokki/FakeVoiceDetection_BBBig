@@ -2,7 +2,7 @@ class Config:
     # base
     user = 'PJY' # 로그용인데 본인 이름 약자 쓰면 파일 저장 할때 쓰임
     feature_extractor = 'facebook/hubert-base-ls960' #'facebook/wav2vec2-xls-r-300m' "facebook/hubert-base-ls960" 'facebook/hubert-large-ls960-ft' 'microsoft/wavlm-base-plus'
-    model = 'ResNet18' # LCNN, MLP, RNET2, AASIST
+    model = 'AASIST' # LCNN, MLP, RNET2, AASIST
     SR = 16000
     feat = 0 # [0: 'raw', 1:'MFCC', 2:'MSTFT']
 
@@ -23,7 +23,9 @@ class Config:
 
     # Training
     N_CLASSES = 2
-    
+
+
+    TOTAL_BATCH_SIZE = 64
     BATCH_SIZE = 16
     N_EPOCHS = 20
     LR = 1e-5
@@ -41,8 +43,8 @@ class Config:
 
     # Others
     SEED = 42
-    train = False
-    finetune = False
+    train = True
+    finetune = True
     finetune_model = 'models/weights/AASIST.pth'
     infer = True
     infer_model = 'ckpt/20240712_160149_hubert+ResNet18_ep_5_best.pt'
@@ -51,9 +53,10 @@ CONFIG = Config()
 
 wandb_config= {
         "model": CONFIG.model,
-        # "feature_extractor" : CONFIG.feature_extractor,
+        "feature_extractor" : CONFIG.feature_extractor,
         "sr": CONFIG.SR,
         "feat": CONFIG.feat,
+        "total_batch": CONFIG.TOTAL_BATCH_SIZE,
         "batch": CONFIG.BATCH_SIZE,
         "epoch": CONFIG.N_EPOCHS,
         "lr": CONFIG.LR,

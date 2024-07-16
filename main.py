@@ -25,31 +25,20 @@ from models.RawNet3 import *
 from models.AASIST import AASIST
 
 def train(model, optimizer, train_loader, val_loader, device, path):
+    accumulation_step = int(CONFIG.TOTAL_BATCH_SIZE / CONFIG.BATCH_SIZE)
     model.to(device)
     main_criterion = nn.BCEWithLogitsLoss().to(device)
-    # if CONFIG.model == 'LCNN':
-    #     if CONFIG.feat == 1:
-    #         cent_criterion = CenterLoss(feat_dim=CONFIG.N_MFCC*2).to(device)
-    #     if CONFIG.feat == 2:
-    #         cent_criterion = CenterLoss(feat_dim=(CONFIG.n_mels//16*32)).to(device)
-    # if CONFIG.model == 'MLP':
-    #         cent_criterion = CenterLoss(feat_dim=2).to(device)
-    # if CONFIG.model == 'RNET2':
-    #         cent_criterion = CenterLoss(feat_dim=512).to(device)
-    # if CONFIG.model == 'RNET3':
-    #         cent_criterion = CenterLoss(feat_dim=2).to(device)
 
     best_val_score = 1
     best_model = None
     scaler = GradScaler()
-    # optimizer_centloss = torch.optim.SGD(cent_criterion.parameters(), lr=CONFIG.cent_loss_weight)
-    
+   
     for epoch in tqdm(range(1, CONFIG.N_EPOCHS+1), desc='Train Epoch'):
         model.train()
+        optimizer.zero_grad()
         train_loss = []
-        center_loss = []
-        xent_loss = []
-        for features, labels in tqdm(iter(train_loader)):
+
+        for idx, (features, labels) in tqdm(enumerate(train_loader), total=len(train_loader), desc='Training'):
             features = features.float().to(device)
             labels = labels.float().to(device)
             # print(features.shape)
@@ -60,46 +49,24 @@ def train(model, optimizer, train_loader, val_loader, device, path):
                     features, output = model(features, label=labels)
                 else:
                     features, output = model(features)
-                # print(output.shape, labels.shape)
-                # print(output)
+
                 main_loss = main_criterion(output, labels)
-                # cent_loss = cent_criterion(features, labels)
-                
-            # cent_loss *= CONFIG.cent_loss_weight
-            loss = main_loss
-
-            optimizer.zero_grad()  
-            # optimizer_centloss.zero_grad()  
-
-            # loss.backward()
-            # optimizer.step()
+                loss = main_loss / accumulation_step     
 
             scaler.scale(loss).backward()
-        
-            # if CONFIG.cent_loss_weight != 0:
-            #     for param in cent_criterion.parameters():
-            #         if param.grad is not None:
-            #             param.grad.data *= (1.0 / CONFIG.cent_loss_weight)
 
-            scaler.step(optimizer)
-            scaler.update()
+            if (idx+1) % accumulation_step == 0 or (idx + 1) == len(train_loader):   
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad()
 
-            # if CONFIG.cent_loss_weight != 0: 
-            #     scaler.step(optimizer_centloss)
-            #     scaler.update()
-                
             train_loss.append(main_loss.item())
-            xent_loss.append(loss.item())
-            # center_loss.append(cent_loss.item())
-            center_loss = np.zeros(1)
-                    
+
         _val_loss, _auc, _brier, _ece, _val_score = validation(model, main_criterion, val_loader, device)
         _train_loss = np.mean(train_loss)
-        _center_loss = np.mean(center_loss)
-        _xent_loss = np.mean(xent_loss)
 
-        print(f'Epoch [{epoch}], Train Loss : [{_train_loss:.5f}] Xent_loss : [{_xent_loss:.5f}] Center Loss : [{_center_loss:.5f}] Val Loss : [{_val_loss:.5f}] Val Combined : [{_val_score:.5f}]')
-        wandb.log({'Train_loss' : _train_loss, 'Xent_loss':_xent_loss, 'Center_loss':_center_loss, 'Val_loss' : _val_loss, 'Val_auc' : _auc, 'Val_brier' : _brier, 'Val_ece': _ece, 'Val_score': _val_score})
+        print(f'Epoch [{epoch}], Train Loss : [{_train_loss:.5f}] Val Loss : [{_val_loss:.5f}] Val Combined : [{_val_score:.5f}]')
+        wandb.log({'Train_loss' : _train_loss, 'Val_loss' : _val_loss, 'Val_auc' : _auc, 'Val_brier' : _brier, 'Val_ece': _ece, 'Val_score': _val_score})
             
         # if best_val_score > _val_score:
         #     best_val_score = _val_score
@@ -197,7 +164,7 @@ def main():
         )
         
         df = pd.read_csv(CONFIG.TRAIN_PATH)
-        # df = df[:100]
+        # df = df[:1000]
         train_df, val_df, _, _ = train_test_split(df, df[['fake', 'real']], test_size=CONFIG.TEST_SIZE, random_state=CONFIG.SEED)
         # val_df.to_csv("val_df.csv", index=False)
 
@@ -255,8 +222,8 @@ def main():
             # torch.save(infer_model.state_dict(), 'ep_4_best.pt')
             print(f'{CONFIG.infer_model} successfully loaded!')
 
-        #test_df = pd.read_csv('data/test.csv')
-        test_df = pd.read_csv('data/val.csv')
+        # test_df = pd.read_csv('data/test.csv')
+        #test_df = pd.read_csv('data/val.csv')
         # test_df = test_df[:100]
         if CONFIG.model:
             test_dataset = Dataset_Eval(test_df['path'].to_list(), feature_extractor, CONFIG.fir_filter)
@@ -276,12 +243,12 @@ def main():
 
         preds = inference(infer_model, test_loader, device)
 
-        #submit = pd.read_csv('data/sample_submission.csv')
-        submit = pd.read_csv('data/val_submission.csv')
+        submit = pd.read_csv('data/sample_submission.csv')
+        #submit = pd.read_csv('data/val_submission.csv')
         submit.iloc[:, 1:] = preds
         print(submit.head())
 
-        submit.to_csv(f'result/{CONFIG.infer_model[5:20]}_{CONFIG.model}_val.csv', index=False)
+        submit.to_csv(f'result/{date}_{CONFIG.model}.csv', index=False)
 
 
 if __name__ == "__main__":
