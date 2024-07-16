@@ -2,6 +2,26 @@ from torch import nn
 import torch.nn.functional as F
 import torch
 import sys
+from torchvision.models import resnet18
+
+# ResNet18 모델 정의
+class ResNet18Audio(nn.Module):
+    def __init__(self):
+        super(ResNet18Audio, self).__init__()
+        self.resnet = resnet18(pretrained=False)
+        
+        # 첫 번째 합성곱 층의 입력 채널을 1로 수정 (오디오 특징 입력에 맞춤)
+        self.resnet.conv1 = nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+        
+        # 마지막 완전 연결 층의 출력을 2로 수정 (각 클래스에 대한 확률 출력)
+        self.resnet.fc = nn.Linear(self.resnet.fc.in_features, 2)
+        #self.sigmoid = nn.Sigmoid()  # Sigmoid 활성화 함수 추가
+    
+    def forward(self, features):
+        features = features.unsqueeze(1).unsqueeze(3)
+        x = self.resnet(features)
+        return features, x
+         # return self.sigmoid(x)  # Sigmoid 적용
 
 class MLP(nn.Module):
     def __init__(self, input_dim, output_dim, hidden_dim=128):
@@ -17,8 +37,8 @@ class MLP(nn.Module):
         x = self.relu(self.fc1(x))
         x = self.relu(self.fc2(x))
         y = self.fc3(x)
-        y = torch.sigmoid(y)
-        return x, y
+        # y = torch.sigmoid(y)
+        return y
     
 class LCNN(nn.Module):
     def __init__(self, in_dim, out_dim):
@@ -88,7 +108,7 @@ class LCNN(nn.Module):
         #print(x.shape)
 
         for idx in range(len(self.m_transform)):
-            #print(x.shape)
+            # print(x.shape)
             x_sp_amp = self.m_transform[idx](x)
             #print(x_sp_amp.shape)
             x_sp_amp = x_sp_amp.permute(0, 3, 1, 2).contiguous()
