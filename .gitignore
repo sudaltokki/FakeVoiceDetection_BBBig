@@ -4,8 +4,10 @@ ckpt
 data
 result
 wandb
-test
 test.py
-
+noise/
+padded/
 .pth
 .ipynb
+.egg
+.ogg

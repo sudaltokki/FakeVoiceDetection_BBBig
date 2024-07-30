@@ -17,8 +17,8 @@ class MLP(nn.Module):
         x = self.relu(self.fc1(x))
         x = self.relu(self.fc2(x))
         y = self.fc3(x)
-        y = torch.sigmoid(y)
-        return x, y
+        # y = torch.sigmoid(y)
+        return y
     
 class LCNN(nn.Module):
     def __init__(self, in_dim, out_dim):
@@ -88,7 +88,7 @@ class LCNN(nn.Module):
         #print(x.shape)
 
         for idx in range(len(self.m_transform)):
-            #print(x.shape)
+            # print(x.shape)
             x_sp_amp = self.m_transform[idx](x)
             #print(x_sp_amp.shape)
             x_sp_amp = x_sp_amp.permute(0, 3, 1, 2).contiguous()

@@ -11,6 +11,7 @@ import os
 import pickle
 import torch.nn as nn
 from datetime import datetime
+import joblib
 
 def get_date():
     # 현재 날짜와 시간을 가져옴
@@ -25,30 +26,32 @@ def seed_everything(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = True
 
-def get_mfcc_feature(df, train_mode=True):
+def get_feature(df, feat, preprocess, train_mode=True):
     features = []
     labels = []
-    d = []
-    data = False
     
     for idx, row in tqdm(df.iterrows(), total = df.shape[0]):
-        if data:
-            mfcc = data[idx]
-        else:
         # librosa패키지를 사용하여 wav 파일 load
-            y, sr = librosa.load('data/'+row['path'][1:], sr=CONFIG.SR)
-        
+        y, sr = librosa.load('data'+row['path'][1:], sr=CONFIG.SR)
+        # print(mfcc.shape)
         # librosa패키지를 사용하여 mfcc 추출
-            mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=CONFIG.N_MFCC)
-            d.append(mfcc)
-        if CONFIG.model == 'LCNN':
-            mfcc = preprocess_spectrogram(mfcc, max_length=CONFIG.max_len)
-        else:
-            mfcc = np.mean(mfcc.T, axis=0)
-        features.append(mfcc)
+        if feat == 1:
+            d = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=CONFIG.N_MFCC)
+        if feat == 2:
+            d = librosa.feature.melspectrogram(y=y, sr=sr, n_fft=CONFIG.n_fft, hop_length=CONFIG.hop_len, win_length=CONFIG.win_len, n_mels=CONFIG.n_mels)
+        if feat == 0:
+            d = pad_audio(y, CONFIG.SR * 5)
+        if preprocess == 'None':
+            pass
+        if preprocess == 'pad':
+            d = preprocess_spectrogram(d, max_length=CONFIG.max_len)
+        if preprocess == 'mean':
+            d = np.mean(d.T, axis=0)
+        features.append(d)
        
         if train_mode:
             label_vector = np.zeros(CONFIG.N_CLASSES, dtype=float)
@@ -122,13 +125,17 @@ def validation(model, main_criterion, cent_criterion, val_loader, device):
             features = features.float().to(device)
             labels = labels.float().to(device)
             
-            features, probs = model(features)
+            f, probs = model(features)
             
-            cent_loss = cent_criterion(features, labels)
+            
+            cent_loss = cent_criterion(f, labels)
             cent_loss *= CONFIG.cent_loss_weight
             loss = main_criterion(probs, labels) + cent_loss
 
             val_loss.append(loss.item())
+
+            outputs_fp32 = probs.float()
+            probs = torch.sigmoid(outputs_fp32)
 
             all_labels.append(labels.cpu().numpy())
             all_probs.append(probs.cpu().numpy())
@@ -252,7 +259,10 @@ class CenterLoss(nn.Module):
         batch_size = x.size(0)
         distmat = torch.pow(x, 2).sum(dim=1, keepdim=True).expand(batch_size, self.num_classes) + \
                   torch.pow(self.centers, 2).sum(dim=1, keepdim=True).expand(self.num_classes, batch_size).t()
-        distmat.addmm_(1, -2, x, self.centers.t())
+        x = x.to(torch.float16)
+        distmat = distmat.to(torch.float16)
+        distmat.addmm_(1, -2, x, self.centers.t().to(torch.float16))
+        # print(distmat)
 
         classes = torch.arange(self.num_classes).long()
         if self.use_gpu: classes = classes.cuda()
@@ -260,21 +270,35 @@ class CenterLoss(nn.Module):
         mask = labels.eq(classes.expand(batch_size, self.num_classes))
 
         dist = distmat * mask.float()
+        # print(dist)
         loss = dist.clamp(min=1e-12, max=1e+12).sum() / batch_size
 
         return loss
     
 def check_data(cfg):
-    feat = {1: 'mfcc_feat', 2:'mstft_feat'}
+    feat = {0: 'raw', 1: 'mfcc_feat', 2:'mstft_feat'}
     train_d = cfg['train_data']
     f = cfg['feat']
     sr = cfg['sr']
     g = list(cfg[feat[f]].values())[0]
-    data_name = f'{train_d}_{f}_{g}_{sr}.pickle'
+    p = cfg['preprocess']
+    data_name = f'{train_d}_{f}_{g}_{sr}_{p}.sav'
     if os.path.exists(data_name):
-        with open(data_name, 'rb') as file:
-            data = pickle.load(file)
-            print(f"Data loaded from {data_name}")
-            return data
+        print(data_name+' found')
+        data = joblib.load(data_name)
+        # with open(data_name, 'rb') as file:
+        #     data = pickle.load(file)
+        #     print(f"Data loaded from {data_name}")
+        return data
     else:
         return False, data_name
+
+def pad_audio(audio, max_len):
+    # print(audio.shape[0])
+    if audio.shape[0] > max_len:
+        return audio[:max_len]
+    else:
+        pad_width = (0, max_len - audio.shape[0])
+        audio = np.pad(audio, pad_width, mode='constant')
+        # print(audio.shape)
+    return audio

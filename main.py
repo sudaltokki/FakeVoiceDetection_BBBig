@@ -3,11 +3,13 @@ import numpy as np
 import pandas as pd
 import pickle
 import wandb
+import joblib
 
 import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
+from torch.cuda.amp import GradScaler, autocast
 from tqdm import tqdm
 
 import warnings
@@ -16,53 +18,58 @@ warnings.filterwarnings('ignore')
 from config import CONFIG, wandb_config
 from utils import *
 from dataset import CustomDataset
-from model import *
+from models.model import *
 
 def train(model, optimizer, train_loader, val_loader, device, path):
     model.to(device)
-
-
-    main_criterion = nn.BCELoss().to(device)
+    main_criterion = nn.BCEWithLogitsLoss().to(device)
     if CONFIG.model == 'LCNN':
         if CONFIG.feat == 1:
             cent_criterion = CenterLoss(feat_dim=CONFIG.N_MFCC*2).to(device)
         if CONFIG.feat == 2:
             cent_criterion = CenterLoss(feat_dim=(CONFIG.n_mels//16*32)).to(device)
     if CONFIG.model == 'MLP':
-            cent_criterion = CenterLoss(feat_dim=128).to(device)
-    optimizer_centloss = torch.optim.SGD(cent_criterion.parameters(), lr=0.5)
-    
+            cent_criterion = CenterLoss(feat_dim=2).to(device)
+    if CONFIG.model == 'RNET3':
+            cent_criterion = CenterLoss(feat_dim=2).to(device)
+
     best_val_score = 1
     best_model = None
+    scaler = GradScaler()
     
     for epoch in tqdm(range(1, CONFIG.N_EPOCHS+1), desc='Train Epoch'):
         model.train()
         train_loss = []
         center_loss = []
         xent_loss = []
-        for features, labels in iter(train_loader):
+        for features, labels in tqdm(iter(train_loader)):
             features = features.float().to(device)
             labels = labels.float().to(device)
             # print(features.shape)
             
+            
+            with autocast():
+                features, output = model(features)
+                # print(output.shape, labels.shape)
+                # print(output)
+                main_loss = main_criterion(output, labels)
+                
             optimizer.zero_grad()
             
-            features, output = model(features)
-            # print(output.shape, labels.shape)
-            main_loss = main_criterion(output, labels)
             cent_loss = cent_criterion(features, labels)
-
             cent_loss *= CONFIG.cent_loss_weight
             loss = main_loss + cent_loss
-       
-            optimizer_centloss.zero_grad()
 
-            loss.backward()
-            optimizer.step()
+            scaler.scale(loss).backward()
         
-            for param in cent_criterion.parameters():
-                param.grad.data *= (1. / CONFIG.cent_loss_weight)
-            optimizer_centloss.step()
+            if CONFIG.cent_loss_weight != 0:
+                for param in cent_criterion.parameters():
+                    param.grad.data *= (0.5 / (CONFIG.cent_loss_weight * CONFIG.LR))
+                # cent_scaler.scale(cent_loss).backward()
+                # cent_scaler.step(optimizer_centloss)
+                # cent_scaler.update()
+            scaler.step(optimizer)
+            scaler.update()
             
             train_loss.append(main_loss.item())
             xent_loss.append(loss.item())
@@ -79,7 +86,7 @@ def train(model, optimizer, train_loader, val_loader, device, path):
         if best_val_score > _val_score:
             best_val_score = _val_score
             best_model = model
-            torch.save(model, f'{path}/ep_{epoch}_best.pt')
+            torch.save(model.state_dict(), f'{path}/ep_{epoch}_best.pt')
     
     return best_model
 
@@ -90,8 +97,10 @@ def inference(model, test_loader, device):
     with torch.no_grad():
         for features in tqdm(iter(test_loader)):
             features = features.float().to(device)
+            # print(features.shape)
             
-            _, probs = model(features)
+            f, probs = model(features)
+            # probs = torch.sigmoid(probs)
 
             if probs.is_cuda:
                 probs = probs.cpu().detach().numpy()
@@ -106,7 +115,29 @@ def main():
     print(device)
 
     seed_everything(CONFIG.SEED) # Seed 고정
-    date = get_date()   
+    date = get_date() 
+
+    if CONFIG.feat == 1:
+        input_dim = CONFIG.N_MFCC
+    if CONFIG.feat == 2:
+        input_dim = CONFIG.n_mels
+
+    if CONFIG.model == 'MLP':
+        model = MLP(input_dim, CONFIG.N_CLASSES)
+    if CONFIG.model == 'LCNN':
+        model = LCNN(input_dim, CONFIG.N_CLASSES)
+    # if CONFIG.model == 'RNET3':
+    #     model = RawNet3(model_scale=8,
+    #                     context=True,
+    #                     summed=True,
+    #                     encoder_type="ASP",
+    #                     nOut=CONFIG.N_CLASSES,
+    #                     out_bn=False,
+    #                     sinc_stride=10,
+    #                     log_sinc=True,
+    #                     norm_sinc="mean",
+    #                     grad_mult=1,
+    #                 )  
 
     if CONFIG.train:
         wandb.init(
@@ -117,42 +148,37 @@ def main():
         config= wandb_config
         )
         
-        
         df = pd.read_csv(CONFIG.TRAIN_PATH)
-        # df = df[112000:]
+        df = df[:100]
         train_df, val_df, _, _ = train_test_split(df, df[['fake', 'real']], test_size=CONFIG.TEST_SIZE, random_state=CONFIG.SEED)
 
-        if CONFIG.feat == 1:
-            train_feat, train_labels = get_mfcc_feature(train_df, True)
-            val_feat, val_labels = get_mfcc_feature(val_df, True)
-            input_dim = CONFIG.N_MFCC
-        if CONFIG.feat == 2:
-            train_feat, train_labels = get_mstft_feature(train_df, True)
-            val_feat, val_labels = get_mstft_feature(val_df, True)
-            input_dim = CONFIG.n_mels
-        
-        # with open("train.pickle", "wb") as f:
-        #     pickle.dump(train_feat, f)
+        data_exists = check_data(wandb_config)
+        if data_exists[0] == False:
+            train_feat, train_labels = get_feature(train_df, CONFIG.feat, CONFIG.mode, True)
+            val_feat, val_labels = get_feature(val_df, CONFIG.feat, CONFIG.mode, True)
 
+            feat_data = [train_feat, train_labels, val_feat, val_labels]
+            joblib.dump(feat_data, data_exists[1])
+            # with open(data_exists[1], "wb") as f:
+            #     pickle.dump(feat_data, f)
+            
+        else:
+            train_feat, train_labels, val_feat, val_labels = data_exists[0], data_exists[1], data_exists[2], data_exists[3]
+            
         train_dataset = CustomDataset(train_feat, train_labels)
         val_dataset = CustomDataset(val_feat, val_labels)
+        del data_exists
 
         train_loader = DataLoader(
-        train_dataset,
-        batch_size=CONFIG.BATCH_SIZE,
-        shuffle=True
+            train_dataset,
+            batch_size=CONFIG.BATCH_SIZE,
+            shuffle=True
         )
         val_loader = DataLoader(
             val_dataset,
             batch_size=CONFIG.BATCH_SIZE,
             shuffle=False
         )
-
-        if CONFIG.model == 'MLP':
-            model = MLP(input_dim, CONFIG.N_CLASSES)
-        if CONFIG.model == 'LCNN':
-            model = LCNN(input_dim, CONFIG.N_CLASSES)
-
         
         optimizer = torch.optim.Adam(params = model.parameters(), lr = CONFIG.LR)
         folder = f'ckpt/{date}'
@@ -161,16 +187,15 @@ def main():
         print("MODEL READY!")
 
     if CONFIG.infer:
-        if not infer_model:
-            infer_model = torch.load(CONFIG.infer_model)
+        if not CONFIG.train:
+            model.load_state_dict(torch.load(CONFIG.infer_model))
+            infer_model = model
+            # torch.save(infer_model.state_dict(), 'ep_4_best.pt')
             print(f'{CONFIG.infer_model} successfully loaded!')
 
         test_df = pd.read_csv('data/test.csv')
         # test_df = test_df[:100]
-        if CONFIG.feat == 1:
-            test_feat = get_mfcc_feature(test_df, False)
-        if CONFIG.feat == 2:
-            test_feat = get_mstft_feature(test_df, False)
+        test_feat = get_feature(test_df, CONFIG.feat, CONFIG.mode, False)
         test_dataset = CustomDataset(test_feat, None)
         print('dataset ready!')
         test_loader = DataLoader(
