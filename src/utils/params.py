@@ -39,6 +39,8 @@ def parse_args(args):
     parser.add_argument("--epochs", type=int, default=5, help="epochs")
     parser.add_argument("--lr", type=float, default=3e-4, help="learning rate")
     parser.add_argument("--log_path", type=str, default="logs", help="log path")
+    parser.add_argument("--extra_log", type=str, default="", help="extra log")
+    parser.add_argument("--debug", default=False, action="store_true", help="If true, more information is logged.")
     
     # infer
     parser.add_argument("--infer", type=bool, default=True, help="infer")

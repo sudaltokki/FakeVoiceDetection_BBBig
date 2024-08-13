@@ -1,7 +1,7 @@
 import numpy as np
 import wandb
-
 import torch
+import logging
 from torch import nn
 from tqdm import tqdm
 
@@ -11,7 +11,19 @@ warnings.filterwarnings('ignore')
 from src.run.evaluate import validation
 from src.utils.loss import CenterLoss
 
-def train(model, optimizer, train_loader, val_loader, device, path, args):
+def train(model, optimizer, train_loader, val_loader, device, args):
+
+    logging.info('** start training ! **\n')
+    logging.info(
+        '--------|-- VALID --|-- TRAIN --|-- Current Best --|--------------|'
+    )
+    logging.info(
+        ' epoch  |    loss   |    loss   |     val_loss     |    time      |'
+    )
+    logging.info(
+        '------------------------------------------------------------------|'
+    )
+
     model.to(device)
 
     criterion = nn.BCELoss().to(device)
@@ -117,6 +129,6 @@ def train(model, optimizer, train_loader, val_loader, device, path, args):
         if best_val_loss > _val_loss:
             best_val_loss = _val_loss
             best_model = model
-            torch.save(model, f'{path}/ep_{epoch}_best.pt')
+            torch.save(model, f'{args.log_path}/ep_{epoch}_best.pt')
     
     return best_model
