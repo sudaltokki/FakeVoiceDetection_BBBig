@@ -4,7 +4,29 @@ import librosa
 import pickle
 import os
 
-from src.utils.utils import preprocess_spectrogram
+def preprocess_spectrogram(spectrogram, max_length):
+    if spectrogram.shape[-1] > max_length:
+        n = spectrogram.shape[1]
+        factor = n // max_length
+        remainder = n % max_length
+
+        downsampled_data = np.empty((spectrogram.shape[0], max_length))
+        
+        # 주된 부분에 대해 평균을 계산
+        for i in range(max_length):
+            start_index = i * factor
+            end_index = start_index + factor
+            downsampled_data[:, i] = spectrogram[:, start_index:end_index].mean(axis=1)
+        
+        # 남은 부분에 대해 평균을 계산
+        if remainder != 0:
+            downsampled_data[:, -1] = spectrogram[:, -remainder:].mean(axis=1)
+        return downsampled_data
+    else:
+        pad_width = ((0, 0), (0, max_length - spectrogram.shape[1]))
+        spectrogram = np.pad(spectrogram, pad_width, mode='constant')
+    return spectrogram
+
 
 def get_mfcc_feature(df, args, train_mode=True):
     features = []

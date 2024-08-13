@@ -1,6 +1,5 @@
 __pycache__
 .venv
-ckpt
 data
 result
 logs

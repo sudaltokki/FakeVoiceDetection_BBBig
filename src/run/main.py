@@ -1,7 +1,7 @@
 from sklearn.model_selection import train_test_split
 import numpy as np
 import pandas as pd
-import pickle
+import logging
 import wandb
 import sys
 import os
@@ -24,31 +24,9 @@ from src.run.train import train
 from src.run.test import inference
 
 from src.utils.dataset import CustomDataset
+from src.utils.logger import setup_logging
 from src.utils.params import parse_args
-from src.utils.utils import seed_everything
-
-def set_wandb(args):
-    wandb_config= {
-        "feature_extractor": args.feature_extractor,
-        "classifier": args.classifier,
-        "sr": args.sr,
-        "feat": args.feature_extractor,
-        "batch": args.batch_size,
-        "epoch": args.epochs,
-        "lr": args.lr,
-        "seed": args.seed,
-        "train_data" : args.train_csv_path,
-        "mfcc_feat" : {"n_mfcc":args.n_mfcc},
-        "mstft_feat" : {"n_mels":args.n_mels, "n_fft":args.n_fft, "hop_len":args.hop_len, "win_len":args.win_len},
-        }
-    
-    wandb.init(
-            # set the wandb project where this run will be logged
-            project="antispoof",
-            name = f'{args.current_time}_{args.user}',
-            # track hyperparameters and run metadata
-            config= wandb_config
-            )
+from src.utils.utils import seed_everything, set_wandb
 
 
 def main(args):
@@ -61,8 +39,26 @@ def main(args):
     seed_everything(args.seed) # Seed 고정
     date = args.current_time 
 
-    if args.train:
+    # set logger
+    # log_base_path = os.path.join(
+    #     args.log_path, 
+    #     f'{args.current_time}_{args.feature_extractor}_{args.classifier}' + (f'_{args.extra_log}' if args.extra_log else '')
+    # )
+    # os.makedirs(log_base_path, exist_ok = True)
+    # log_filename = 'out.log'
+    # args.log_path = os.path.join(log_base_path, log_filename)
+    # if os.path.exists(args.log_path):
+    #     print("Error. Experiment already exists.")
+    #     return -1
+    
+    # args.log_level = logging.DEBUG if args.debug else logging.INFO
+    setup_logging(args)
 
+    args_info = "\n".join([f"{arg}: {getattr(args, arg)}" for arg in vars(args)])
+    logging.info(f"\n-----------------------------Arguments----------------------------|\n{args_info}\n")
+
+    # training
+    if args.train:
         if args.set_wandb:
             set_wandb(args)
         
@@ -94,11 +90,8 @@ def main(args):
             model = LCNN(input_dim, args.n_classes)
         
         optimizer = torch.optim.Adam(params = model.parameters(), lr = args.lr)
-        
-        folder = f'ckpt/{date}'
-        os.makedirs(folder, exist_ok=True)
 
-        infer_model = train(model, optimizer, train_loader, val_loader, device, folder, args)
+        infer_model = train(model, optimizer, train_loader, val_loader, device, args)
         print("MODEL READY!")
 
     if args.infer:
@@ -107,7 +100,7 @@ def main(args):
             print(f'{args.classifier_checkpoint} successfully loaded!')
 
         test_df = pd.read_csv(args.test_csv_path)
-        # test_df = test_df[:100]
+        test_df = test_df[:100]
         if args.feature_extractor == 'mfcc':
             test_feat = get_mfcc_feature(test_df, args, False)
         elif args.feature_extractor == 'mstft':
