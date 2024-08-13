@@ -37,21 +37,7 @@ def main(args):
     print(device)
 
     seed_everything(args.seed) # Seed 고정
-    date = args.current_time 
 
-    # set logger
-    # log_base_path = os.path.join(
-    #     args.log_path, 
-    #     f'{args.current_time}_{args.feature_extractor}_{args.classifier}' + (f'_{args.extra_log}' if args.extra_log else '')
-    # )
-    # os.makedirs(log_base_path, exist_ok = True)
-    # log_filename = 'out.log'
-    # args.log_path = os.path.join(log_base_path, log_filename)
-    # if os.path.exists(args.log_path):
-    #     print("Error. Experiment already exists.")
-    #     return -1
-    
-    # args.log_level = logging.DEBUG if args.debug else logging.INFO
     setup_logging(args)
 
     args_info = "\n".join([f"{arg}: {getattr(args, arg)}" for arg in vars(args)])
@@ -106,7 +92,7 @@ def main(args):
         elif args.feature_extractor == 'mstft':
             test_feat = get_mstft_feature(test_df, args, False)
         test_dataset = CustomDataset(test_feat, None)
-        print('dataset ready!')
+        print('test dataset ready!')
         test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
 
         preds = inference(infer_model, test_loader, device)
@@ -115,7 +101,7 @@ def main(args):
         submit.iloc[:, 1:] = preds
         print(submit.head())
 
-        submit.to_csv(f'result/{date}.csv', index=False)
+        submit.to_csv(f'result/{args.log_path}.csv', index=False)
 
 
 if __name__ == "__main__":
