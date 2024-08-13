@@ -3,6 +3,7 @@ __pycache__
 ckpt
 data
 result
+logs
 wandb
 test
 test.py

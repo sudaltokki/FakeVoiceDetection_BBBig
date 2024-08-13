@@ -1,6 +1,5 @@
 from tqdm.auto import tqdm
 import librosa
-from config import CONFIG
 import numpy as np
 from sklearn.metrics import roc_auc_score, mean_squared_error
 from sklearn.calibration import calibration_curve
@@ -12,12 +11,6 @@ import pickle
 import torch.nn as nn
 from datetime import datetime
 
-def get_date():
-    # 현재 날짜와 시간을 가져옴
-    now = datetime.now()
-    # 원하는 형식으로 변환
-    current_datetime_str = now.strftime("%Y%m%d_%H%M%S")
-    return current_datetime_str
 
 def seed_everything(seed):
     random.seed(seed)
@@ -28,82 +21,6 @@ def seed_everything(seed):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = True
 
-def get_mfcc_feature(df, train_mode=True):
-    features = []
-    labels = []
-    d = []
-    data = False
-    
-    for idx, row in tqdm(df.iterrows(), total = df.shape[0]):
-        if data:
-            mfcc = data[idx]
-        else:
-        # librosa패키지를 사용하여 wav 파일 load
-            y, sr = librosa.load('data/'+row['path'][1:], sr=CONFIG.SR)
-        
-        # librosa패키지를 사용하여 mfcc 추출
-            mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=CONFIG.N_MFCC)
-            d.append(mfcc)
-        if CONFIG.model == 'LCNN':
-            mfcc = preprocess_spectrogram(mfcc, max_length=CONFIG.max_len)
-        else:
-            mfcc = np.mean(mfcc.T, axis=0)
-        features.append(mfcc)
-       
-        if train_mode:
-            label_vector = np.zeros(CONFIG.N_CLASSES, dtype=float)
-            label_vector[0] = row['fake']
-            label_vector[1] = row['real']
-            labels.append(label_vector)
-
-    if train_mode:
-        return features, labels
-    return features
-
-def get_mstft_feature(df, train_mode=True):
-    features = []
-    labels = []
-    d = []
-    data = False
-    if train_mode:
-        if os.path.exists(f'data/train_mstft{str(CONFIG.n_mels)}.pickle'):
-            with open(f'data/train_mstft{str(CONFIG.n_mels)}.pickle', 'rb') as file:
-                data = pickle.load(file)
-                print(f"Data loaded from data/train_mstft{str(CONFIG.n_mels)}.pickle")
-    else:
-        if os.path.exists(f'data/test_mstft{str(CONFIG.n_mels)}.pickle'):
-            with open(f'data/test_mstft{str(CONFIG.n_mels)}.pickle', 'rb') as file:
-                data = pickle.load(file)
-                print(f"Data loaded from data/test_mstft{str(CONFIG.n_mels)}.pickle")
-    for idx, row in tqdm(df.iterrows(), total = df.shape[0]):
-        if data:
-            mstft = data[idx]
-        else:
-            # librosa패키지를 사용하여 wav 파일 load
-            y, sr = librosa.load('data/'+row['path'][1:], sr=CONFIG.SR)
-            
-            # librosa패키지를 사용하여 mstft 추출
-            mstft = librosa.feature.melspectrogram(y=y, sr=sr, n_fft=CONFIG.n_fft, hop_length=CONFIG.hop_len, win_length=CONFIG.win_len, n_mels=CONFIG.n_mels)
-            d.append(mstft)
-        if CONFIG.model == 'LCNN':
-            mstft = preprocess_spectrogram(mstft, max_length=CONFIG.max_len)
-        else:
-            mstft = np.mean(mstft.T, axis=0)
-        features.append(mstft)
-        # if len(d):
-        #     with open(f'data/train_mstft{str(CONFIG.n_mels)}.pickle', 'wb') as file:
-        #             pickle.dump(d, file)
-        #             print(f"Data saved as data/train_mstft{str(CONFIG.n_mels)}.pickle")
-
-        if train_mode:
-            label_vector = np.zeros(CONFIG.N_CLASSES, dtype=float)
-            label_vector[0] = row['fake']
-            label_vector[1] = row['real']
-            labels.append(label_vector)
-
-    if train_mode:
-        return features, labels
-    return features
 
 def multiLabel_AUC(y_true, y_scores):
     auc_scores = []
@@ -113,36 +30,38 @@ def multiLabel_AUC(y_true, y_scores):
     mean_auc_score = np.mean(auc_scores)
     return mean_auc_score
     
-def validation(model, main_criterion, cent_criterion, val_loader, device):
-    model.eval()
-    val_loss, all_labels, all_probs = [], [], []
+# def validation(model, main_criterion, cent_criterion, val_loader, device):
+#     model.eval()
+#     val_loss, all_labels, all_probs = [], [], []
     
-    with torch.no_grad():
-        for features, labels in iter(val_loader):
-            features = features.float().to(device)
-            labels = labels.float().to(device)
+#     with torch.no_grad():
+#         for features, labels in iter(val_loader):
+#             features = features.float().to(device)
+#             labels = labels.float().to(device)
             
-            features, probs = model(features)
+#             features, probs = model(features)
             
-            cent_loss = cent_criterion(features, labels)
-            cent_loss *= CONFIG.cent_loss_weight
-            loss = main_criterion(probs, labels) + cent_loss
+#             cent_loss = cent_criterion(features, labels)
+#             cent_loss *= args.cent_loss_weight
+#             loss = main_criterion(probs, labels) + cent_loss
 
-            val_loss.append(loss.item())
+#             val_loss.append(loss.item())
 
-            all_labels.append(labels.cpu().numpy())
-            all_probs.append(probs.cpu().numpy())
+#             all_labels.append(labels.cpu().numpy())
+#             all_probs.append(probs.cpu().numpy())
         
-        _val_loss = np.mean(val_loss)
+#         _val_loss = np.mean(val_loss)
 
-        all_labels = np.concatenate(all_labels, axis=0)
-        all_probs = np.concatenate(all_probs, axis=0)
+#         all_labels = np.concatenate(all_labels, axis=0)
+#         all_probs = np.concatenate(all_probs, axis=0)
 
-        # Calculate AUC score
-        auc_score, brier_score, ece_score, combined_score = auc_brier_ece(all_labels, all_probs)
+#         # Calculate AUC score
+#         auc_score, brier_score, ece_score, combined_score = auc_brier_ece(all_labels, all_probs)
 
     
-    return _val_loss, auc_score, brier_score, ece_score, combined_score
+#     return _val_loss, auc_score, brier_score, ece_score, combined_score
+
+
 
 def expected_calibration_error(y_true, y_prob, n_bins=10):
     prob_true, prob_pred = calibration_curve(y_true, y_prob, n_bins=n_bins, strategy='uniform')
