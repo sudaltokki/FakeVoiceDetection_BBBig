@@ -44,54 +44,8 @@ def train(model, optimizer, train_loader, val_loader, device, args):
     best_model = None
     
     for epoch in tqdm(range(1, args.epochs+1), desc='Train Epoch'):
-        # model.train()
-        # train_loss = []
-        # center_loss = []
-        # xent_loss = []
-        # for features, labels in iter(train_loader):
-        #     features = features.float().to(device)
-        #     labels = labels.float().to(device)
-        #     # print(features.shape)
-        #     print(features)
-        #     print(labels)
-
-            
-        #     optimizer.zero_grad()
-            
-        #     features, output = model(features)
-        #     # print(output.shape, labels.shape)
-        #     main_loss = main_criterion(output, labels)
-        #     cent_loss = cent_criterion(features, labels)
-
-        #     cent_loss *= args.cent_loss_weight
-        #     loss = main_loss + cent_loss
-       
-        #     optimizer_centloss.zero_grad()
-
-        #     loss.backward()
-        #     optimizer.step()
-        
-        #     for param in cent_criterion.parameters():
-        #         param.grad.data *= (1. / args.cent_loss_weight)
-        #     optimizer_centloss.step()
-            
-        #     train_loss.append(main_loss.item())
-        #     xent_loss.append(loss.item())
-        #     center_loss.append(cent_loss.item())
                     
-        # # _val_loss, _auc, _brier, _ece, _val_score = validation(model, main_criterion, cent_criterion, val_loader, device)
-        # _val_loss = validation(model, criterion, val_loader, device)
-        # _train_loss = np.mean(train_loss)
-        # # _center_loss = np.mean(center_loss)
-        # # _xent_loss = np.mean(xent_loss)
 
-        # # print(f'Epoch [{epoch}], Train Loss : [{_train_loss:.5f}] Xent_loss : [{_xent_loss:.5f}] Center Loss : [{_center_loss:.5f}] Val Loss : [{_val_loss:.5f}] Val Combined : [{_val_score:.5f}]')
-        # # wandb.log({'Train_loss' : _train_loss, 'Xent_loss':_xent_loss, 'Center_loss':_center_loss, 'Val_loss' : _val_loss, 'Val_auc' : _auc, 'Val_brier' : _brier, 'Val_ece': _ece, 'Val_score': _val_score})
-            
-        # if best_val_score > _val_score:
-        #     best_val_score = _val_score
-        #     best_model = model
-        #     torch.save(model, f'{path}/ep_{epoch}_best.pt')
         model.train()
         train_loss = []
         for features, labels in tqdm(iter(train_loader)):
@@ -114,14 +68,6 @@ def train(model, optimizer, train_loader, val_loader, device, args):
         # wandb.log({'Train_loss' : _train_loss, 'Val_loss' : _val_loss, 'Val_auc' : _auc, 'Val_brier' : _brier, 'Val_ece': _ece, 'Val_score': _val_score})
             
         # if best_val_score > _val_score:
-        #     best_val_score = _val_score
-        #     best_model = model
-
-        # _val_loss, _val_score = validation(model, criterion, val_loader, device)
-        # _train_loss = np.mean(train_loss)
-        # print(f'Epoch [{epoch}], Train Loss : [{_train_loss:.5f}] Val Loss : [{_val_loss:.5f}] Val AUC : [{_val_score:.5f}]')
-            
-        # if best_val_score < _val_score:
         #     best_val_score = _val_score
         #     best_model = model
 
