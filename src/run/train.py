@@ -13,7 +13,9 @@ warnings.filterwarnings('ignore')
 from src.run.evaluate import validation
 from src.utils.loss import CenterLoss
 from src.utils.utils import time_to_str
+from torch.cuda.amp import GradScaler, autocast
 
+scaler = GradScaler()
 def train(model, optimizer, train_loader, val_loader, device, args):
 
     logging.info('** Start Training ! **')
@@ -54,11 +56,13 @@ def train(model, optimizer, train_loader, val_loader, device, args):
             
             optimizer.zero_grad()
             
-            features, output = model(features)
-            loss = criterion(output, labels)
+            with autocast():
+                _, output = model(features)
+                loss = criterion(output, labels)
             
-            loss.backward()
-            optimizer.step()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
             
             train_loss.append(loss.item())
                     
