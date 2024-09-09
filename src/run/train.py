@@ -57,7 +57,7 @@ def train(model, optimizer, train_loader, val_loader, device, args):
             optimizer.zero_grad()
             
             with autocast():
-                _, output = model(features)
+                output = model(features)
                 loss = criterion(output, labels)
             
             scaler.scale(loss).backward()

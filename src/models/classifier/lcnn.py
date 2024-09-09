@@ -87,7 +87,8 @@ class LCNN(nn.Module):
             #print(y[0])
             tmp_emb = self.m_output_act[idx]((x_lstm + x_sp_amp).mean(1))
             #print(tmp_emb.shape)
-        return y, torch.sigmoid(tmp_emb).squeeze(1)
+        #return y, torch.sigmoid(tmp_emb).squeeze(1)
+        return torch.sigmoid(tmp_emb).squeeze(1)
 
 class BLSTMLayer(torch.nn.Module):
     """ Wrapper over dilated conv1D

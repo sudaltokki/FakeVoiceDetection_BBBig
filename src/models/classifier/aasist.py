@@ -654,4 +654,5 @@ class AASIST(nn.Module):
         last_hidden = self.drop(last_hidden)
         output = self.out_layer(last_hidden)
 
-        return last_hidden, output
+        #return last_hidden, output
+        return output

@@ -17,6 +17,8 @@ def parse_args(args):
     # model
     parser.add_argument("--feature_extractor", type=str, default='mfcc', help="mfcc / mstft")
     parser.add_argument("--classifier", type=str, default='MLP', help="MLP / LCNN")
+    parser.add_argument("--aasist_ckpt", type=str, default='ckpt/AASIST.pth', help="aasist weight path")
+
     
     # preprocess
     parser.add_argument("--sr", type=int, default=16000, help="Sample Rate")
@@ -37,7 +39,9 @@ def parse_args(args):
     parser.add_argument("--batch_size", type=int, default=8, help="Batch size per GPU.")
     parser.add_argument("--total_batch_size", type=int, default=64, help="Total batch size per GPU.")
     parser.add_argument("--epochs", type=int, default=5, help="epochs")
-    parser.add_argument("--lr", type=float, default=3e-4, help="learning rate")
+    parser.add_argument("--lr", type=float, default=1e-4, help="learning rate")
+    parser.add_argument("--wd", type=float, default=1e-4, help="weight decay")
+
     parser.add_argument("--log_path", type=str, default="logs", help="log path")
     parser.add_argument("--extra_log", type=str, default="", help="extra log")
     parser.add_argument("--debug", default=False, action="store_true", help="If true, more information is logged.")
