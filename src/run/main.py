@@ -21,7 +21,7 @@ from src.models.classifier.mlp import MLP
 from src.models.classifier.lcnn import LCNN
 
 from src.run.train import train
-from src.run.test import inference
+from src.run.inference import inference
 
 from src.utils.dataset import CustomDataset
 from src.utils.logger import setup_logging

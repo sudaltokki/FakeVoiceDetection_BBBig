@@ -56,7 +56,7 @@ def parse_args(args):
     parser.add_argument("--current_time", type=str, default=current_time, help="current time")
 
     # wandb
-    parser.add_argument("--set_wandb", type=bool, default=True, help="wandb")
+    parser.add_argument("--set_wandb", type=bool, default=False, help="wandb")
     parser.add_argument("--user", type=str, default="", help="user name")
 
 
