@@ -18,4 +18,5 @@ class MLP(nn.Module):
         x = self.relu(self.fc2(x))
         y = self.fc3(x)
         y = torch.sigmoid(y)
-        return x, y
+        #return x, y
+        return y
